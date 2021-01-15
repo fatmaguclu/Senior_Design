@@ -4,7 +4,7 @@ from pyzbar import pyzbar
 import argparse
 import datetime
 import rospy
-from math import *
+import math
 import struct
 import numpy as np
 import cv2
@@ -34,7 +34,7 @@ img_topic = '/raspicam_node/image_raw'
 vicon_topic= '/vrpn_client_node/SDP20/pose'
 
 
-vx, vy = -0.1, -0.1
+vx, vy = -0., -0.
 
 
 ##########################
@@ -44,15 +44,15 @@ class DroneLocalization:
 	def __init__(self,rate,initial):
 		self.ser = serial.Serial(PORT_UWB, 115200, timeout=1.0)
 		#self.vicon.cb = rospy.Subscriber( TOPIC_VICON, PositionTarget, self.vicon)
-		self.imgCb = rospy.Subscriber(img_topic, Image, self.imageCb)
+		self.imgCb = rospy.Subscriber('/raspicam_node/image_raw', Image, self.imageCb)
 		self.initial_pos = initial
 		self.vicon_cb = rospy.Subscriber(vicon_topic, PositionTarget, self.vicon)
 		self.sp_position = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=1) ## Setpoint
 		# Parameters
 		self.d1 = 0.0
-		self.img = []
-		self.X_anchor = -2.0
-		self.Y_anchor = -2.0       
+		self.img = 0.0
+		self.X_anchor = 0.35
+		self.Y_anchor = 3.0       
 		self.X = np.zeros((2,1)) # EKF state at time t
 		#self.Xt_1 = np.zeros((2,1)) # EKF state at time t-1
 		self.R = np.zeros((2,2)) # 2x2 motion model covariance
@@ -103,9 +103,10 @@ class DroneLocalization:
 	def imageCb(self,msg):
 		# Read image
 		self.img = bridge.imgmsg_to_cv2(msg, 'bgr8')
+		#print('aaaaaaaaaa')
 
-	def imageProcessing(self,msg):
-		try:
+	def imageProcessing(self):
+		if 1 == 1:
 			# loop over the frames from the video stream
 			barcodes = pyzbar.decode(self.img)
 			# loop over the detected barcodes
@@ -130,7 +131,7 @@ class DroneLocalization:
 				print("Estimation:", self.x_bar, ",", self.y_bar)
 				# if the barcode text is currently not in our CSV file, write
 				#the timestamp + barcode to disk and update the set
-				if barcodeData not in found:
+				if barcodeData not in self.found:
 					self.csv.write("{},{}\n".format(datetime.datetime.now(),barcodeData))
 					self.csv.flush()
 					self.found.add(barcodeData)
@@ -138,12 +139,13 @@ class DroneLocalization:
 
 		#cv2.imshow('cv_img',img)
 		#cv2.waitKey(1)
-		except CvBridgeError as e:
-			print(e)
+		#except CvBridgeError as e:
+			#print(e)
 		else:
 			#pass
-			cv2.imshow('raspicam_node motion vectors visualization', self.img)
-			cv2.waitKey(1)
+			print('Image not detected')
+			#cv2.imshow('raspicam_node motion vectors visualization', self.img)
+			#cv2.waitKey(1)
 
 	def uwb(self):
 		for x in xrange(0,2):
@@ -159,7 +161,7 @@ class DroneLocalization:
 						x2 = values[0][15:23]
 						x3 = values[0][24:32]
 					#print('Hex:'+a+', '+ x1+', '+x2+', '+x3)
-					self.d1 = int(x1,16)/10	# Anchor 0
+					self.d1 = int(x1,16)/1000.	# Anchor 0
 					d2 = int(x2,16)/10	# Anchor 1
 					d3 = int(x3,16)/10	# Anchor 2
 					#print('UWB: ', str(d1)) #, '+str(d2)+', '+str(d3))
@@ -215,17 +217,20 @@ def main():
 	rate = rospy.Rate(FREQ)
 	initial_pos = [[2.0,2.0,3.,0.]]
 	cnt = DroneLocalization(rate,initial_pos)
+	ctr = 0
 
 	while not rospy.is_shutdown():
 		now = rospy.get_rostime()
-		cnt.imageProcessing()
+		ctr += 1
+		if ctr > 10:
+			cnt.imageProcessing()
 		cnt.uwb()
 		cnt.ekf()
 		#rospy.loginfo("Current time %i %i", now.secs, now.nsecs)
-		cnt.generatePosition(vx,vy,0.6,0.)
-		cnt.sp_position.publish(cnt.sp_pose)
+		#cnt.generatePosition(vx,vy,0.6,0.)
+		#cnt.sp_position.publish(cnt.sp_pose)
 		# Monitor
-		print(cnt.x_bar, cnt.y_bar, 'UWB: ', cnt.d1, 'EKF: ', scnt.nu)
+		print(cnt.x_bar, cnt.y_bar, 'UWB: ', cnt.d1, 'EKF: ', cnt.nu[0,0], cnt.nu[1,0])
 		rate.sleep()
 
 if __name__ == '__main__':
