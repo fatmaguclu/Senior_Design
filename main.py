@@ -26,13 +26,14 @@ PORT_UWB = '/dev/ttyACM0'
 
 ##### Global Parameters ######
 bridge = CvBridge()	# Bridge Function Between OpenCV and ROS
-FREQ = 20.0		# Frequency
+FREQ = 20.0			# Frequency
 TS = 1.0/FREQ 		# Time
 
 img_topic = '/raspicam_node/image_raw'		
 vicon_topic= '/vrpn_client_node/SDP20/pose'	
 
 vx, vy = -0., -0.	# Velocities
+
 
 ##########################
 ##########################
@@ -52,14 +53,14 @@ class DroneLocalization:
 		self.Y_anchor = 3.0       
 		self.X = np.zeros((2,1)) # EKF state at time t
 		self.R = np.zeros((2,2)) # 2x2 motion model covariance
-		self.R[0,0], self.R[1,1] = 0.04, 0.04	# Noise
+		self.R[0,0], self.R[1,1] = 0.04, 0.04
 		self.Vel = np.zeros((2,1))
 		self.nu = np.zeros((2,1))
 		self.nup = np.zeros((2,1))
 		self.Gt = [[1.0, 0.0], [0.0, 1.0]]
 		self.g = np.zeros((2,1))
 		self.Y = np.zeros((3,1))
-		self.Q = np.zeros((3,3)) # 3x3 Measurement Covariance Matrix
+		self.Q = np.zeros((3,3)) # 3x3 measurement covariance
 		self.Q[0,0], self.Q[1,1], self.Q[2,2] = 0.01, 0.01, 0.01
 		self.h = np.zeros((3,1))
 		self.hnup = np.zeros((3,1))
@@ -67,13 +68,13 @@ class DroneLocalization:
 		self.Sp = np.zeros((2,2))
 		self.S = np.zeros((2,2))
 		self.K = np.zeros((2,3))
-		# Camera Parameters
+		# Camera parameters
 		self.h_drone = 1.2
 		self.f = 3.6*0.001
 		self.px = 3.76*0.001/640
 		self.py = 2.74*0.001/480
 		self.x_bar, self.y_bar = 0.0, 0.0
-		# Construct Argument Parser and Parse Arguments
+		# Construct the argument parser and parse the arguments
 		ap = argparse.ArgumentParser()
 		ap.add_argument("-o", "--output", type=str, default="barcodes.csv",help="path to output CSV file containing barcodes")
 		args = vars(ap.parse_args())
@@ -98,6 +99,7 @@ class DroneLocalization:
 	def imageCb(self,msg):
 		# Read image
 		self.img = bridge.imgmsg_to_cv2(msg, 'bgr8')
+		#print('aaaaaaaaaa')
 
 	##########################
 	##########################
@@ -111,6 +113,7 @@ class DroneLocalization:
 				# the bounding box surrounding the barcode on the image
 				(x, y, w, h) = barcode.rect
 				#cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 2)
+				#print("pixels",float((x+w/2)),float((y+h/2)))
 				# on our output image we need to convert it to a string first
 				barcodeData = barcode.data.decode("utf-8")
 				x_qr=int(barcodeData[0:2])
@@ -121,7 +124,8 @@ class DroneLocalization:
 				#real location estimation
 				self.x_bar = x_qr + i*self.px*(self.f-self.h_drone)/(self.f)
 				self.y_bar = y_qr + j*self.py*(self.f-self.h_drone)/(self.f)
-				# Estiated position from QR code in the image
+				#print("QR x_qr,y_qr position:", x_qr, ",", y_qr)
+				#print("QR i,j position:", i, ",", j)
 				print("Estimation:", self.x_bar, ",", self.y_bar)
 				# if the barcode text is currently not in our CSV file, write
 				#the timestamp + barcode to disk and update the set
@@ -130,13 +134,17 @@ class DroneLocalization:
 					self.csv.flush()
 					self.found.add(barcodeData)
 
+
+		#cv2.imshow('cv_img',img)
+		#cv2.waitKey(1)
+		#except CvBridgeError as e:
+			#print(e)
 		else:
+			#pass
 			print('Image not detected')
-			#cv2.imshow('raspicam_node', self.img)
+			#cv2.imshow('raspicam_node motion vectors visualization', self.img)
 			#cv2.waitKey(1)
-	
-	##########################
-	##########################
+
 	def uwb(self):
 		for x in xrange(0,2):
 			data = self.ser.readline()
@@ -150,26 +158,26 @@ class DroneLocalization:
 						x1 = values[0][6:14]
 						x2 = values[0][15:23]
 						x3 = values[0][24:32]
-					# Distances between tag and anchors
+					#print('Hex:'+a+', '+ x1+', '+x2+', '+x3)
 					self.d1 = int(x1,16)/1000.	# Anchor 0
-					d2 = int(x2,16)/10		# Anchor 1
-					d3 = int(x3,16)/10		# Anchor 2
+					d2 = int(x2,16)/10	# Anchor 1
+					d3 = int(x3,16)/10	# Anchor 2
 					#print('UWB: ', str(d1)) #, '+str(d2)+', '+str(d3))
+					dist = float(values[0])
 				except:
 					pass
 
-	##########################
-	##########################
 	def ekf(self):
 		self.Vel[0,0] = vx
 		self.Vel[1,0] = vy
+
 		# Measurement Model
 		self.Y[0,0] = self.x_bar
 		self.Y[1,0] = self.y_bar
 		self.Y[2,0] = self.d1 
 		# Prediction Update
-		self.nup = self.nup + self.Vel*TS 	#Predicted Mean 
-		self.Sp = self.S + self.R 		#Predicted Covarience
+		self.nup = self.nup + self.Vel*TS #PREDICTED MEAN 
+		self.Sp = self.S + self.R #PREDICTED COVARIANCE
 		# Linearized Measurement Model 
 		dist_pred = math.sqrt(pow(self.nup[0,0]-self.X_anchor,2) + pow(self.nup[1,0]-self.Y_anchor,2))
 		self.Ht = [[1.0,0.0], [0.0,1.0], [(self.nup[0,0]-self.X_anchor)/dist_pred , (self.nup[1,0]-self.Y_anchor)/dist_pred] ]
@@ -177,12 +185,12 @@ class DroneLocalization:
 		self.hnup[1,0] = self.nup[1,0]
 		self.hnup[2,0] = dist_pred
 		# Measurement Update
-		self.K = np.matmul(np.matmul(self.Sp, np.transpose(self.Ht)), np.linalg.inv(np.matmul(self.Ht, np.matmul(self.Sp, np.transpose(self.Ht))) + self.Q))	# Kalman Gain
-		self.nu = self.nup + np.matmul(self.K,(self.Y-self.hnup))			# Mean
-		self.S = np.matmul((np.identity(2) - np.matmul(self.K, self.Ht)) , self.Sp)	# Covarience
+		self.K = np.matmul(np.matmul(self.Sp, np.transpose(self.Ht)), np.linalg.inv(np.matmul(self.Ht, np.matmul(self.Sp, np.transpose(self.Ht))) + self.Q))
+		self.nu = self.nup + np.matmul(self.K,(self.Y-self.hnup))
+		self.S = np.matmul((np.identity(2) - np.matmul(self.K, self.Ht)) , self.Sp)
 
-	##########################
-	##########################
+		#print(self.nu)
+
 	def generatePosition(self,vx,vy,z=0.6,yaw=0.):
 		''' instantiate setpoint msg '''
 		self.sp_pose = PositionTarget()
@@ -197,6 +205,7 @@ class DroneLocalization:
 		self.sp_pose.yaw_rate =  yaw	# the yaw velocity
 		self.sp_pose.coordinate_frame = 8 # Body NED
 		return sp_pose
+
 
 ##########################
 ##########################
@@ -222,8 +231,6 @@ def main():
 		print(cnt.x_bar, cnt.y_bar, 'UWB: ', cnt.d1, 'EKF: ', cnt.nu[0,0], cnt.nu[1,0])
 		rate.sleep()
 
-##########################
-##########################
 if __name__ == '__main__':
 	try:
 		main()
