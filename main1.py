@@ -39,6 +39,8 @@ vx, vy = -0., -0.	# Velocities
 ##########################
 ##########################
 class DroneLocalization:
+	##########################
+	##########################
 	def __init__(self,rate,initial):
 		self.ser = serial.Serial(PORT_UWB, 115200, timeout=1.0)
 		#self.vicon.cb = rospy.Subscriber( TOPIC_VICON, PositionTarget, self.vicon)
@@ -144,7 +146,9 @@ class DroneLocalization:
 			print('Image not detected')
 			#cv2.imshow('raspicam_node motion vectors visualization', self.img)
 			#cv2.waitKey(1)
-
+	
+	##########################
+	##########################
 	def uwb(self):
 		for x in xrange(0,2):
 			data = self.ser.readline()
@@ -167,6 +171,8 @@ class DroneLocalization:
 				except:
 					pass
 
+	##########################
+	##########################
 	def ekf(self):
 		self.Vel[0,0] = vx
 		self.Vel[1,0] = vy
@@ -190,7 +196,9 @@ class DroneLocalization:
 		self.S = np.matmul((np.identity(2) - np.matmul(self.K, self.Ht)) , self.Sp)
 
 		#print(self.nu)
-
+	
+	##########################
+	##########################
 	def generatePosition(self,vx,vy,z=0.6,yaw=0.):
 		''' instantiate setpoint msg '''
 		self.sp_pose = PositionTarget()
@@ -231,6 +239,8 @@ def main():
 		print(cnt.x_bar, cnt.y_bar, 'UWB: ', cnt.d1, 'EKF: ', cnt.nu[0,0], cnt.nu[1,0])
 		rate.sleep()
 
+##########################
+##########################
 if __name__ == '__main__':
 	try:
 		main()
