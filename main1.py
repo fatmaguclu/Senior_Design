@@ -124,8 +124,10 @@ class DroneLocalization:
 				i =x+(w/2)-320
 				j =-(y+(h/2))+240
 				#real location estimation
-				self.x_bar = x_qr + i*self.px*(self.f-self.h_drone)/(self.f)
-				self.y_bar = y_qr + j*self.py*(self.f-self.h_drone)/(self.f)
+				#self.x_bar = x_qr + i*self.px*(self.f-self.h_drone)/(self.f)
+				#self.y_bar = y_qr + j*self.py*(self.f-self.h_drone)/(self.f) - 0.025
+				self.x_bar = x_qr +  j*self.py*(self.f-self.h_drone)/(self.f) - 0.025
+				self.y_bar = y_qr - i*self.px*(self.f-self.h_drone)/(self.f)
 				#print("QR x_qr,y_qr position:", x_qr, ",", y_qr)
 				#print("QR i,j position:", i, ",", j)
 				print("Estimation:", self.x_bar, ",", self.y_bar)
